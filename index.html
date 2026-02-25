@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SHEET MOVIE - Google Sheets Video Overlay</title>
+  <meta name="description" content="Google Sheetsのセルをピクセルに見立てて動画をモザイク再生するChrome拡張機能">
+  <meta property="og:title" content="SHEET MOVIE">
+  <meta property="og:description" content="Google Sheetsのセルをピクセルに見立てて動画をモザイク再生するChrome拡張機能">
+  <meta property="og:image" content="https://paul13131313.github.io/sheet-movie/ogp.png">
+  <meta property="og:url" content="https://paul13131313.github.io/sheet-movie/">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=Noto+Sans+JP:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #0a0f0d;
+      --surface: #141c18;
+      --border: #1e2e26;
+      --green: #0F9D58;
+      --green-light: #34d399;
+      --green-glow: rgba(15, 157, 88, 0.3);
+      --text: #e0e8e4;
+      --text-dim: #7a8f84;
+      --cell-border: rgba(15, 157, 88, 0.12);
+    }
+
+    body {
+      font-family: 'Noto Sans JP', 'Space Grotesk', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      overflow-x: hidden;
+    }
+
+    /* Grid background */
+    .grid-bg {
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(var(--cell-border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--cell-border) 1px, transparent 1px);
+      background-size: 101px 21px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      position: relative;
+      z-index: 1;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Hero */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 60px 24px;
+    }
+
+    .hero-badge {
+      display: inline-block;
+      padding: 4px 14px;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      font-size: 12px;
+      color: var(--green-light);
+      font-family: 'Space Grotesk', monospace;
+      letter-spacing: 0.08em;
+      margin-bottom: 32px;
+    }
+
+    .hero h1 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: clamp(48px, 10vw, 80px);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.05;
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, #fff 30%, var(--green-light));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero-sub {
+      font-family: 'Space Grotesk', monospace;
+      font-size: 14px;
+      color: var(--text-dim);
+      letter-spacing: 0.15em;
+      margin-bottom: 32px;
+    }
+
+    .hero p {
+      font-size: 16px;
+      color: var(--text-dim);
+      max-width: 520px;
+      margin-bottom: 48px;
+    }
+
+    .hero-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 36px;
+      background: var(--green);
+      color: #fff;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 15px;
+      transition: all 0.2s;
+      box-shadow: 0 0 30px var(--green-glow);
+    }
+    .hero-cta:hover {
+      background: var(--green-light);
+      color: var(--bg);
+      box-shadow: 0 0 50px var(--green-glow);
+      transform: translateY(-2px);
+    }
+
+    /* Section */
+    section {
+      padding: 80px 0;
+    }
+
+    section h2 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 40px;
+      text-align: center;
+      color: var(--green-light);
+    }
+
+    /* How it works */
+    .steps {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .step {
+      display: flex;
+      gap: 20px;
+      padding: 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      transition: border-color 0.2s;
+    }
+    .step:hover {
+      border-color: var(--green);
+    }
+
+    .step-num {
+      font-family: 'Space Grotesk', monospace;
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--green);
+      line-height: 1;
+      min-width: 40px;
+    }
+
+    .step-text h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .step-text p {
+      font-size: 14px;
+      color: var(--text-dim);
+    }
+
+    /* Features */
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+    }
+
+    .feature {
+      padding: 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      text-align: center;
+    }
+
+    .feature-icon {
+      font-size: 32px;
+      margin-bottom: 12px;
+    }
+
+    .feature h3 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .feature p {
+      font-size: 13px;
+      color: var(--text-dim);
+    }
+
+    /* Install */
+    .install-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 32px;
+      text-align: center;
+    }
+
+    .install-box p {
+      font-size: 14px;
+      color: var(--text-dim);
+      margin-bottom: 20px;
+    }
+
+    .install-steps {
+      text-align: left;
+      max-width: 500px;
+      margin: 0 auto 24px;
+    }
+
+    .install-steps li {
+      font-size: 14px;
+      margin-bottom: 10px;
+      padding-left: 8px;
+      color: var(--text);
+    }
+
+    .install-steps code {
+      background: rgba(15, 157, 88, 0.15);
+      color: var(--green-light);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-family: 'Space Grotesk', monospace;
+    }
+
+    .dl-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 32px;
+      background: var(--green);
+      color: #fff;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    .dl-btn:hover {
+      background: var(--green-light);
+      color: var(--bg);
+    }
+
+    /* Footer */
+    footer {
+      padding: 40px 0;
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-dim);
+      border-top: 1px solid var(--border);
+    }
+
+    footer a {
+      color: var(--green);
+      text-decoration: none;
+    }
+
+    /* Mosaic animation */
+    .mosaic-demo {
+      width: 100%;
+      max-width: 600px;
+      margin: 0 auto 48px;
+      aspect-ratio: 16/5;
+      display: grid;
+      grid-template-columns: repeat(20, 1fr);
+      grid-template-rows: repeat(5, 1fr);
+      gap: 1px;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .mosaic-cell {
+      animation: cellPulse 3s ease-in-out infinite;
+    }
+
+    @keyframes cellPulse {
+      0%, 100% { opacity: 0.7; }
+      50% { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <div class="grid-bg"></div>
+
+  <div class="hero">
+    <div class="container">
+      <span class="hero-badge">Chrome Extension</span>
+      <h1>SHEET<br>MOVIE</h1>
+      <p class="hero-sub">GOOGLE SHEETS VIDEO OVERLAY</p>
+
+      <div class="mosaic-demo" id="mosaic"></div>
+
+      <p>Google Sheetsのセルをピクセルに見立てて、動画をモザイク状にリアルタイム再生するChrome拡張機能。スプレッドシートが映像キャンバスに変わる。</p>
+
+      <a href="https://github.com/paul13131313/sheet-movie/archive/refs/heads/main.zip" class="hero-cta">
+        Download ZIP
+      </a>
+    </div>
+  </div>
+
+  <section>
+    <div class="container">
+      <h2>How It Works</h2>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">01</div>
+          <div class="step-text">
+            <h3>拡張機能をインストール</h3>
+            <p>ZIPをダウンロードして展開。Chromeの拡張機能管理画面で「パッケージ化されていない拡張機能を読み込む」からフォルダを選択。</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">02</div>
+          <div class="step-text">
+            <h3>スプレッドシートを開く</h3>
+            <p>Google Sheetsで任意のスプレッドシートを開くと、右上にコントロールパネルが表示される。</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">03</div>
+          <div class="step-text">
+            <h3>動画を選択して再生</h3>
+            <p>mp4ファイルを選択して ▶ を押すだけ。セル1つ1つがピクセルとなり、モザイク状の映像がスプレッドシート上で動き出す。</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="container">
+      <h2>Features</h2>
+      <div class="features">
+        <div class="feature">
+          <div class="feature-icon">🎬</div>
+          <h3>セル単位モザイク</h3>
+          <p>Sheetsのセルグリッドに完全同期したピクセル化描画</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">🔍</div>
+          <h3>ズーム追従</h3>
+          <p>50%〜200%のズームレベルに自動対応</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">🔊</div>
+          <h3>音声再生</h3>
+          <p>元動画の音声をそのまま再生。ミュート切替も可能</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">🖱️</div>
+          <h3>操作を邪魔しない</h3>
+          <p>ドロップダウンやメニューは映像の上に表示される</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="container">
+      <h2>Install</h2>
+      <div class="install-box">
+        <p>Chrome Web Storeには未公開です。以下の手順で手動インストールしてください。</p>
+        <ol class="install-steps">
+          <li>ZIPをダウンロードして展開する</li>
+          <li>Chromeで <code>chrome://extensions</code> を開く</li>
+          <li>右上の「デベロッパーモード」をONにする</li>
+          <li>「パッケージ化されていない拡張機能を読み込む」をクリック</li>
+          <li>展開したフォルダ（<code>sheet-movie-main</code>）を選択</li>
+          <li>Google Sheetsを開くと自動で有効になる</li>
+        </ol>
+        <a href="https://github.com/paul13131313/sheet-movie/archive/refs/heads/main.zip" class="dl-btn">
+          Download ZIP
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="container">
+      <p>SHEET MOVIE &mdash; Built with <a href="https://github.com/paul13131313/sheet-movie">GitHub</a></p>
+    </div>
+  </footer>
+
+  <script>
+    // Animated mosaic demo
+    const mosaic = document.getElementById('mosaic');
+    const greens = [
+      '#0a2e1a', '#0f3d22', '#145c33', '#1a7a44', '#0F9D58',
+      '#34d399', '#6ee7b7', '#a7f3d0', '#d1fae5', '#ecfdf5'
+    ];
+    const cells = [];
+    for (let i = 0; i < 100; i++) {
+      const cell = document.createElement('div');
+      cell.className = 'mosaic-cell';
+      cell.style.backgroundColor = greens[Math.floor(Math.random() * greens.length)];
+      cell.style.animationDelay = (Math.random() * 3) + 's';
+      mosaic.appendChild(cell);
+      cells.push(cell);
+    }
+    setInterval(() => {
+      const idx = Math.floor(Math.random() * cells.length);
+      cells[idx].style.backgroundColor = greens[Math.floor(Math.random() * greens.length)];
+    }, 100);
+  </script>
+</body>
+</html>

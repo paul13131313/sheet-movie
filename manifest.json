@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "Sheets Video Overlay",
+  "version": "0.1.0",
+  "description": "Google Sheetsにセル風モザイク動画をオーバーレイ",
+  "permissions": ["storage", "activeTab"],
+  "host_permissions": ["https://docs.google.com/spreadsheets/*"],
+  "action": {
+    "default_popup": "src/popup.html",
+    "default_icon": {
+      "16": "assets/icon16.png",
+      "48": "assets/icon48.png",
+      "128": "assets/icon128.png"
+    }
+  },
+  "background": {
+    "service_worker": "src/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://docs.google.com/spreadsheets/*"],
+      "js": ["src/content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
